@@ -1,0 +1,10 @@
+[workspace]
+
+members = [
+    "lib/http",
+    "lib/html",
+    "lib/css",
+    "lib/dom",
+    "bin/bowser",
+    "bin/mario",
+]
