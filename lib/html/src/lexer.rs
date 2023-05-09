@@ -1,3 +1,5 @@
+// TODO: Correctly implement HTML tokenization specification (https://html.spec.whatwg.org/#tokenization)
+
 use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
@@ -286,9 +288,9 @@ pub trait Lexer {
 
         // Attributes (if present)
 
-        while self.has_next_char() {            
+        while self.has_next_char() {
             // Chop whitespace
-            text.push_str(&self.read_while(char::is_whitespace));            
+            text.push_str(&self.read_while(char::is_whitespace));
 
             if self.peek_matches(">") || self.peek_matches("/>") {
                 break;
@@ -375,12 +377,16 @@ pub trait Lexer {
 pub struct StringLexer {
     input: String,
     position: usize,
-    peeked_token: RefCell<Option<Token>>
+    peeked_token: RefCell<Option<Token>>,
 }
 
 impl StringLexer {
     pub fn new(input: String) -> Self {
-        Self { input, position: 0, peeked_token: RefCell::new(None) }
+        Self {
+            input,
+            position: 0,
+            peeked_token: RefCell::new(None),
+        }
     }
 }
 
