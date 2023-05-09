@@ -1,8 +1,13 @@
 #![feature(is_some_and)]
 
-use std::{collections::HashMap, io::Read};
+use std::{
+    collections::{HashMap, VecDeque},
+    io::Read,
+};
 
-use lexer::{StreamLexer, StringLexer, Lexer};
+use lexer::{Lexer, StreamLexer, StringLexer};
+
+use crate::lexer::Token;
 
 mod lexer;
 
@@ -32,9 +37,16 @@ pub fn parse_stream(html_stream: impl Read) -> Document {
 }
 
 fn parse_html(mut lexer: impl Lexer) -> Document {
-    while lexer.has_next() {
-        println!("{:?}", lexer.next_token().unwrap());
+    let mut tokens: VecDeque<Token> = VecDeque::new();
+
+    let mut token = lexer.next_token();
+    while let Some(t) = token {
+        tokens.push_back(t);
+
+        token = lexer.next_token();
     }
-    
+
+    println!("{:#?}", tokens);
+
     todo!("Parse HTML")
 }

@@ -70,7 +70,7 @@ pub trait Lexer {
 
     fn get_position(&self) -> usize;
 
-    fn has_next(&self) -> bool {
+    fn has_next_char(&self) -> bool {
         self.peek_char().is_some()
     }
     fn has_next_nth(&self, n: usize) -> bool {
@@ -91,6 +91,20 @@ pub trait Lexer {
         })
     }
 
+    fn peek_is<F: Fn(char) -> bool>(&self, predicate: F) -> bool {
+        self.peek_char().is_some_and(predicate)
+    }
+
+    fn read_while<F: Fn(char) -> bool>(&mut self, predicate: F) -> String {
+        let mut text = String::new();
+
+        while self.has_next_char() && self.peek_is(&predicate) {
+            text.push(self.next_char().unwrap());
+        }
+
+        text
+    }
+
     fn next_token(&mut self) -> Option<Token> {
         if self.peek_char().is_none() {
             return Some(Token::new(
@@ -100,7 +114,7 @@ pub trait Lexer {
             ));
         }
 
-        while self.has_next() {
+        while self.has_next_char() {
             if self.peek_matches("<!--") {
                 return Some(self.expect_comment());
             }
@@ -147,7 +161,7 @@ pub trait Lexer {
         text.push(self.next_char().unwrap());
 
         // "html"
-        while self.has_next() {
+        while self.has_next_char() {
             if self.peek_matches(">") {
                 break;
             }
@@ -185,7 +199,7 @@ pub trait Lexer {
         }
 
         // "this is a comment"
-        while self.has_next() {
+        while self.has_next_char() {
             if self.peek_matches("-->") {
                 break;
             }
@@ -221,7 +235,7 @@ pub trait Lexer {
         }
 
         // "body"
-        while self.has_next() {
+        while self.has_next_char() {
             if self.peek_matches(">") {
                 break;
             }
@@ -229,7 +243,7 @@ pub trait Lexer {
             let c = self.next_char().unwrap();
 
             assert!(
-                c.is_ascii_alphabetic() || c.is_ascii_whitespace(),
+                c.is_ascii_alphanumeric() || c.is_ascii_whitespace(),
                 "illegal character in tag name"
             );
 
@@ -256,14 +270,91 @@ pub trait Lexer {
     }
 
     fn expect_open_or_self_close_tag(&mut self) -> Token {
-        todo!("parse open or self close tag")
+        let start = self.get_position();
+        let mut text = String::new();
+        let mut attributes: HashMap<String, String> = HashMap::new();
+
+        // "<"
+        assert!(self.peek_matches("<"));
+        text.push(self.next_char().unwrap());
+
+        // "body"
+        let tag_name = self.read_while(char::is_alphanumeric);
+        text.push_str(&tag_name);
+
+        assert!(tag_name.len() > 0);
+
+        // Attributes (if present)
+
+        while self.has_next_char() {            
+            // Chop whitespace
+            text.push_str(&self.read_while(char::is_whitespace));            
+
+            if self.peek_matches(">") || self.peek_matches("/>") {
+                break;
+            }
+
+            // Attribute name
+            let attribute_name = self.read_while(|c| c.is_ascii_alphanumeric() || c == '-');
+            text.push_str(&attribute_name);
+
+            assert!(attribute_name.len() > 0);
+
+            // "="
+            assert_eq!(self.peek_char().unwrap(), '=');
+            text.push(self.next_char().unwrap());
+
+            // Attribute value
+            let mut attribute_value = String::new();
+
+            // First '"' or "'"
+            assert!(self.peek_is(|c| c == '"' || c == '\''));
+            let quote = self.next_char().unwrap();
+            attribute_value += &quote.to_string();
+
+            // actual value
+            attribute_value += &self.read_while(|c| c != quote);
+
+            // Second '"' or "'"
+            assert!(self.peek_is(|c| c == quote));
+            attribute_value += &self.next_char().unwrap().to_string();
+
+            assert!(attribute_value.len() >= 2);
+
+            text.push_str(&attribute_value);
+            attributes.insert(attribute_name, attribute_value);
+        }
+
+        let data = TagData {
+            name: tag_name,
+            attributes,
+        };
+
+        // ">" or "/>"
+        assert!(self.peek_matches(">") || self.peek_matches("/>"));
+
+        let kind = if self.peek_matches(">") {
+            // Open Tag
+            text.push(self.next_char().unwrap());
+
+            TokenKind::TagOpen(data)
+        } else {
+            // Self close tag
+            for _ in 0..2 {
+                text.push(self.next_char().unwrap());
+            }
+
+            TokenKind::TagSelfClose(data)
+        };
+
+        Token::new(kind, text, Span::new(start, self.get_position()))
     }
 
     fn expect_text(&mut self) -> Token {
         let start = self.get_position();
         let mut text = String::new();
 
-        while self.has_next() {
+        while self.has_next_char() {
             if self.peek_matches("<") {
                 break;
             }
@@ -271,7 +362,7 @@ pub trait Lexer {
             text.push(self.next_char().unwrap());
         }
 
-        assert_eq!(self.peek_char().unwrap(), '>', "Unexpected end of file");
+        assert_eq!(self.peek_char().unwrap(), '<', "Unexpected end of file");
 
         Token::new(
             TokenKind::Text(text.trim().to_string()),
@@ -284,11 +375,12 @@ pub trait Lexer {
 pub struct StringLexer {
     input: String,
     position: usize,
+    peeked_token: RefCell<Option<Token>>
 }
 
 impl StringLexer {
     pub fn new(input: String) -> Self {
-        Self { input, position: 0 }
+        Self { input, position: 0, peeked_token: RefCell::new(None) }
     }
 }
 

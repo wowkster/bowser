@@ -26,17 +26,17 @@ async fn main() {
 // basic handler that responds with a static string
 async fn root() -> Html<&'static str> {
     Html(indoc! {
-        "
+        r#"
         <!DOCTYPE html>
         <html>
             <head>
                 <title>Mario!</title>
             </head>
-            <body>
-                <h1>Mario!</h1>
+            <body id="root">
+                <h1 class="big_title" aria-label='heading'>Mario!</h1>
                 <p>It's a me, Mario!</p>
             </body>
         </html>
-        "
+        "#
     })
 }
