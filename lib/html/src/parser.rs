@@ -17,6 +17,7 @@ pub struct HtmlParser {
     encoding_confidence: EncodingConfidence,
 }
 
+/// https://html.spec.whatwg.org/#concept-encoding-confidence
 #[derive(Debug, PartialEq, Eq)]
 enum EncodingConfidence {
     Tentative,
@@ -32,6 +33,7 @@ impl HtmlParser {
         }
     }
 
+    /// https://html.spec.whatwg.org/#parsing-with-a-known-character-encoding
     pub fn with_definite_encoding(character_encoding: CharacterEncoding) -> Self {
         Self {
             character_encoding,
@@ -39,7 +41,9 @@ impl HtmlParser {
         }
     }
 
-    /// Will try to parse an HTML document, but will abort if any error condition is discovered
+    /// Will try to parse an HTML document, but will abort if any error condition is discovered.
+    /// This behavior is allowed in the spec if the user agent does not wish to implement
+    /// parse error recovery (https://html.spec.whatwg.org/#parse-errors)
     pub fn try_parse(mut self, input_byte_stream: impl Read) -> HtmlParseResult<Document> {
         let input_byte_stream = IoQueue::new(input_byte_stream);
 
@@ -63,6 +67,7 @@ impl HtmlParser {
     }
 
     /// Will parse an HTML document and recover from any errors as defined in the HTML parsing specification.
+    /// (https://html.spec.whatwg.org/#parse-errors)
     pub fn parse(self, input_byte_stream: impl Read) -> Document {
         todo!("Parse with error recovery")
     }
