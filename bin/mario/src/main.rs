@@ -30,6 +30,7 @@ async fn root() -> Html<&'static str> {
         <!DOCTYPE html>
         <html>
             <head>
+                <meta http-equiv="content-type" content="text/html; charset=utf8">
                 <title>Mario!</title>
             </head>
             <body id="root">

@@ -1,9 +1,10 @@
 use std::{convert::Infallible, str::FromStr, time::Duration};
 
 use lazy_static::lazy_static;
-use reqwest::{Client, ClientBuilder};
+use reqwest::blocking::{Client, ClientBuilder};
 
-pub use reqwest::*;
+pub use reqwest::blocking::*;
+pub use reqwest::StatusCode;
 
 lazy_static! {
     pub static ref HTTP_CLIENT: Client = ClientBuilder::new()
