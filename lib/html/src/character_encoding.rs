@@ -258,7 +258,7 @@ impl<R: Read> Decoder<R> for Utf8Decoder {
                 bytes.push(c);
 
                 // Multi-byte sequences always have bytes start with 10xxxxxx after the first byte
-                if c & 0b1100_000 == 0b1000_000 {
+                if c & 0b1100_0000 == 0b1000_0000 {
                     // Mask out data bytes
                     Ok((c & 0b0011_1111) as u32)
                 } else {

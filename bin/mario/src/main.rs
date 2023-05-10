@@ -34,6 +34,7 @@ async fn root() -> Html<&'static str> {
                 <title>Mario!</title>
             </head>
             <body id="root">
+                🦀
                 <h1 class="big_title" aria-label='heading'>Mario!</h1>
                 <p>It's a me, Mario!</p>
             </body>
