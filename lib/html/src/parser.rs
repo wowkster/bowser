@@ -1,16 +1,6 @@
-use std::{io::Read, str::FromStr};
+use std::io::Read;
 
-use crate::{character_encoding::CharacterEncoding, io_queue::IoQueue, prescan::HtmlPreScanner};
-
-/// Represents well defined tokenization and tree construction
-/// errors in the spec (https://html.spec.whatwg.org/#parse-errors)
-pub enum HtmlParseError {
-    // Tokenization Errors
-
-    // Tree Construction Errors
-}
-
-pub type HtmlParseResult<T> = Result<T, HtmlParseError>;
+use crate::{character_encoding::CharacterEncoding, io_queue::IoQueue, prescan::HtmlPreScanner, HtmlParseResult};
 
 pub struct HtmlParser {
     character_encoding: CharacterEncoding,
