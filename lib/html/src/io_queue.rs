@@ -42,7 +42,7 @@ impl<R: Read> IoQueue<R> {
         let mut peeked = self.peeked.borrow_mut();
 
         if !peeked.is_empty() {
-            return peeked.front().map(|b|*b);
+            return peeked.front().map(|b| *b);
         }
 
         let mut stream = self.stream.borrow_mut();
@@ -58,14 +58,14 @@ impl<R: Read> IoQueue<R> {
 
         peeked.push_back(buf[0]);
 
-        peeked.front().map(|b|*b)
+        peeked.front().map(|b| *b)
     }
 
     pub fn peek_nth(&self, n: usize) -> Option<u8> {
         let mut peeked = self.peeked.borrow_mut();
 
         if peeked.len() > n {
-            return peeked.get(n).map(|b|*b);
+            return peeked.get(n).map(|b| *b);
         }
 
         let mut stream = self.stream.borrow_mut();
@@ -85,7 +85,7 @@ impl<R: Read> IoQueue<R> {
             return None;
         }
 
-        return peeked.get(n).map(|b|*b);
+        return peeked.get(n).map(|b| *b);
     }
 
     pub fn has_next(&self) -> bool {
