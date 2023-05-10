@@ -17,7 +17,7 @@ impl<R: Read> IoQueue<R> {
         }
     }
 
-    pub fn next(&mut self) -> Option<u8> {
+    pub fn next_byte(&mut self) -> Option<u8> {
         let mut peeked = self.peeked.borrow_mut();
 
         if !peeked.is_empty() {
@@ -42,7 +42,7 @@ impl<R: Read> IoQueue<R> {
         let mut peeked = self.peeked.borrow_mut();
 
         if !peeked.is_empty() {
-            return peeked.front().map(|b| *b);
+            return peeked.front().copied();
         }
 
         let mut stream = self.stream.borrow_mut();
@@ -58,14 +58,14 @@ impl<R: Read> IoQueue<R> {
 
         peeked.push_back(buf[0]);
 
-        peeked.front().map(|b| *b)
+        peeked.front().copied()
     }
 
     pub fn peek_nth(&self, n: usize) -> Option<u8> {
         let mut peeked = self.peeked.borrow_mut();
 
         if peeked.len() > n {
-            return peeked.get(n).map(|b| *b);
+            return peeked.get(n).copied();
         }
 
         let mut stream = self.stream.borrow_mut();
@@ -77,15 +77,15 @@ impl<R: Read> IoQueue<R> {
             .read(&mut buf)
             .expect("Could not read from byte stream");
 
-        for i in 0..bytes_read {
-            peeked.push_back(buf[i])
-        }
+        buf.iter()
+            .take(bytes_read)
+            .for_each(|b| peeked.push_back(*b));
 
         if bytes_read < chars_to_peek {
             return None;
         }
 
-        return peeked.get(n).map(|b| *b);
+        return peeked.get(n).copied();
     }
 
     pub fn has_next(&self) -> bool {
@@ -100,7 +100,7 @@ impl<R: Read> IoQueue<R> {
     pub fn peek_max(&self, max: usize) {
         // TODO: optimize
         for n in 0..max {
-            if let None = self.peek_nth(n) {
+            if self.peek_nth(n).is_none() {
                 return;
             }
         }
@@ -143,6 +143,6 @@ impl<R: Read> Iterator for IoQueue<R> {
     type Item = u8;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.next()
+        self.next_byte()
     }
 }

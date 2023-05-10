@@ -18,5 +18,5 @@ fn main() {
 
     // println!("Body: \n{:?}", res.text());
 
-    html::HtmlParser::new().try_parse(res);
+    let _ = html::HtmlParser::new().try_parse(res);
 }

@@ -43,7 +43,7 @@ impl FromStr for ContentType {
         // Match case insensitively
         let media_type = media_type.parse::<MediaType>().unwrap();
 
-        let charset = parameters.and_then(|s| Some(s.parse::<Charset>().unwrap()));
+        let charset = parameters.map(|s| s.parse::<Charset>().unwrap());
 
         Ok(ContentType {
             media_type,

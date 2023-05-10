@@ -54,7 +54,7 @@ impl<'a, R: Read> HtmlPreScanner<'a, R> {
         'next_byte: loop {
             self.assert_pos()?;
 
-            let letters: Vec<u8> = (0x41..0x5A).chain(0x61..0x7A).into_iter().collect();
+            let letters: Vec<u8> = (0x41..0x5A).chain(0x61..0x7A).collect();
 
             // `<!--`
             if self.contains_bytes(&[0x3C, 0x21, 0x2D, 0x2D])? {
@@ -255,7 +255,7 @@ impl<'a, R: Read> HtmlPreScanner<'a, R> {
             let last_index = value[position..]
                 .chars()
                 .enumerate()
-                .find(|(_, c)| c.is_ascii_whitespace() || *c as char == ';')
+                .find(|(_, c)| c.is_ascii_whitespace() || *c == ';')
                 .map(|(i, _)| i)
                 .unwrap_or_else(|| value.len());
 
@@ -287,7 +287,7 @@ impl<'a, R: Read> HtmlPreScanner<'a, R> {
 
             match self.current_byte()? {
                 // `=`
-                0x3D if name.len() > 0 => {
+                0x3D if !name.is_empty() => {
                     self.position += 1;
 
                     // Jump to Value

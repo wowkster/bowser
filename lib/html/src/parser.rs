@@ -1,13 +1,23 @@
 use std::io::Read;
 
-use crate::{character_encoding::CharacterEncoding, io_queue::IoQueue, prescan::HtmlPreScanner, HtmlParseResult};
+use crate::{
+    character_encoding::CharacterEncoding, io_queue::IoQueue, prescan::HtmlPreScanner,
+    HtmlParseResult,
+};
 
 pub struct HtmlParser {
     character_encoding: CharacterEncoding,
     encoding_confidence: EncodingConfidence,
 }
 
+impl Default for HtmlParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// https://html.spec.whatwg.org/#concept-encoding-confidence
+#[allow(unused)]
 #[derive(Debug, PartialEq, Eq)]
 enum EncodingConfidence {
     Tentative,
@@ -58,6 +68,7 @@ impl HtmlParser {
 
     /// Will parse an HTML document and recover from any errors as defined in the HTML parsing specification.
     /// (https://html.spec.whatwg.org/#parse-errors)
+    #[allow(unused)]
     pub fn parse(self, input_byte_stream: impl Read) -> Document {
         todo!("Parse with error recovery")
     }
@@ -97,7 +108,7 @@ impl HtmlParser {
         // TODO
 
         // Step 5: Pre-scan the byte stream to determine the encoding
-        if let Some(encoding) = HtmlPreScanner::new(&io_queue).pre_scan_byte_stream() {
+        if let Some(encoding) = HtmlPreScanner::new(io_queue).pre_scan_byte_stream() {
             return (encoding, EncodingConfidence::Tentative);
         }
 
@@ -122,6 +133,7 @@ impl HtmlParser {
     }
 }
 
+#[allow(unused)]
 pub struct Document {
     encoding: CharacterEncoding,
 }
