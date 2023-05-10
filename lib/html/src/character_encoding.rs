@@ -1,7 +1,6 @@
-use core::num;
 use std::{io::Read, str::FromStr};
 
-use crate::{io_queue::IoQueue, HtmlParseResult};
+use crate::io_queue::IoQueue;
 
 #[derive(Default, PartialEq, Eq, Clone, Copy)]
 pub enum CharacterEncoding {
@@ -177,7 +176,7 @@ impl ToString for CharacterEncoding {
 }
 
 impl CharacterEncoding {
-    pub fn decoder<R: Read>(&self) -> impl IoDecoder<R> {
+    pub fn decoder<R: Read>(&self) -> impl Decoder<R> {
         match self {
             CharacterEncoding::Utf8 => Utf8Decoder,
             CharacterEncoding::IBM866 => todo!(),
@@ -223,34 +222,140 @@ impl CharacterEncoding {
     }
 }
 
-pub trait IoDecoder<R: Read> {
-    fn decode(&self, io_queue: &mut IoQueue<R>) -> Option<(char, Vec<u8>)>;
+pub trait Decoder<R: Read> {
+    /// Reads the next unicode character from the given input byte stream
+    ///
+    /// Does not allow surrogates, non-characters, or control characters
+    fn decode(&self, io_queue: &mut IoQueue<R>) -> Result<Option<(char, Vec<u8>)>, DecodingError>;
 }
 
 pub struct Utf8Decoder;
 
-impl<R: Read> IoDecoder<R> for Utf8Decoder {
-    fn decode(&self, io_queue: &mut IoQueue<R>) -> Option<(char, Vec<u8>)> {
-        let start_position = io_queue.bytes_read();
+pub enum DecodingError {
+    UnexpectedEof,
+    UnexpectedSurrogate,
+    UnexpectedNonCharacter,
+    UnexpectedControl,
+    InvalidData,
+}
 
-        let first_bytes = io_queue.peek_arr(4);
-
-        let c = utf8_decode::decode(io_queue);
-
-        let end_position = io_queue.bytes_read();
-
-        let num_bytes = end_position - start_position;
-
-        let read_bytes = (&first_bytes[..num_bytes]).to_vec();
-
-        let Some(c) = c else {
-            return None
+impl<R: Read> Decoder<R> for Utf8Decoder {
+    fn decode(&self, io_queue: &mut IoQueue<R>) -> Result<Option<(char, Vec<u8>)>, DecodingError> {
+        // If queue has no bytes, then can't decode a code-point
+        let Some(first) = io_queue.next() else {
+            return Ok(None)
         };
 
-        let Ok(c) = c else {
-            return None
+        let mut bytes = Vec::new();
+        bytes.push(first);
+
+        let a = first as u32;
+
+        /// Macro to try and extract another byte in the 2-4 position
+        macro_rules! next_byte {
+            () => {{
+                let c = io_queue.next().ok_or(DecodingError::UnexpectedEof)?;
+                bytes.push(c);
+
+                // Multi-byte sequences always have bytes start with 10xxxxxx after the first byte
+                if c & 0b1100_000 == 0b1000_000 {
+                    // Mask out data bytes
+                    Ok((c & 0b0011_1111) as u32)
+                } else {
+                    Err(DecodingError::InvalidData)
+                }
+            }};
+        }
+
+        // Try and decode from the stream
+
+        let code_point =
+        // MSB is a 0 (single byte code point)
+        if a & 0b1000_0000 == 0b0000_0000 {
+            a
+        }
+        // 3 MSB's are 110 (two byte code point)
+        else if a & 0b1110_0000 == 0b1100_0000 {
+            let b = next_byte!()?;
+            (a & 0b0001_1111) << 6 | b
+        }
+        // 4 MSB's are 1110 (three byte code point)
+        else if a & 0b1111_0000 == 0b1110_0000 {
+            let b = next_byte!()?;
+            let c = next_byte!()?;
+            (a & 0b0000_1111) << 12 | b << 6 | c
+        }
+        // 5 MSB's are 11110 (four byte code point)
+        else if a & 0b1111_1000 == 0b1111_0000 {
+            let b = next_byte!()?;
+            let c = next_byte!()?;
+            let d = next_byte!()?;
+            (a & 0b0000_0111) << 18 | b << 12 | c << 6 | d
+        }
+        // First byte does not match any valid UTF-8 sequence
+        else {
+            return Err(DecodingError::InvalidData);
         };
 
-        Some((c, read_bytes))
+        // Remove ugly characters
+        match code_point {
+            // Leading surrogate
+            0xD800..=0xDBFF => return Err(DecodingError::UnexpectedSurrogate),
+            // Trailing surrogate
+            0xDC00..=0xDFFF => return Err(DecodingError::UnexpectedSurrogate),
+            // Non-characters
+            0xFDD0..=0xFDEF
+            | 0xFFFE
+            | 0xFFFF
+            | 0x1FFFE
+            | 0x1FFFF
+            | 0x2FFFE
+            | 0x2FFFF
+            | 0x3FFFE
+            | 0x3FFFF
+            | 0x4FFFE
+            | 0x4FFFF
+            | 0x5FFFE
+            | 0x5FFFF
+            | 0x6FFFE
+            | 0x6FFFF
+            | 0x7FFFE
+            | 0x7FFFF
+            | 0x8FFFE
+            | 0x8FFFF
+            | 0x9FFFE
+            | 0x9FFFF
+            | 0xAFFFE
+            | 0xAFFFF
+            | 0xBFFFE
+            | 0xBFFFF
+            | 0xCFFFE
+            | 0xCFFFF
+            | 0xDFFFE
+            | 0xDFFFF
+            | 0xEFFFE
+            | 0xEFFFF
+            | 0xFFFFE
+            | 0xFFFFF
+            | 0x10FFFE
+            | 0x10FFFF => return Err(DecodingError::UnexpectedNonCharacter),
+            // Control characters
+            x @ (0x00..=0x1F | 0x7F..=0x9F)
+                if x != 0 && !char::from_u32(x).unwrap().is_ascii_whitespace() =>
+            {
+                return Err(DecodingError::UnexpectedControl)
+            }
+            _ => {}
+        }
+
+        // Make sure our code point is in the valid range (it should be by now)
+        assert!(
+            code_point < 0x10FFFF,
+            "Decoded code-point was not in the valid unicode Range"
+        );
+
+        // Converting to a char should now be 100% safe since we have removed
+        // non-USV code points, and ensured it is in the valid range
+        Ok(Some((char::from_u32(code_point).unwrap(), bytes)))
     }
 }

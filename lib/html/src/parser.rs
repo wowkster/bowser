@@ -1,8 +1,8 @@
 use std::io::Read;
 
 use crate::{
-    character_encoding::CharacterEncoding, io_queue::IoQueue, prescan::HtmlPreScanner,
-    HtmlParseResult, IoDecoder,
+    character_encoding::CharacterEncoding, io_queue::IoQueue, prescan::HtmlPreScanner, Decoder,
+    DecodingError, HtmlParseError, HtmlParseResult,
 };
 
 pub struct HtmlParser<R> {
@@ -78,21 +78,46 @@ impl<R: Read> HtmlParser<R> {
         todo!("Parse with error recovery")
     }
 
-    /// Decodes bytes from the input_byte_stream
+    /// Decodes bytes from the input_byte_stream in a "lossy" manner (i.e. invalid data is
+    /// replaced with REPLACEMENT_CHARACTER)
     #[allow(unused)]
-    fn decode_char(&mut self) -> HtmlParseResult<Option<char>> {        
+    fn decode_char(&mut self) -> HtmlParseResult<Option<char>> {
+        // Use the decoder for the selected character encoding to get a character
         let decoded = self
             .character_encoding
             .decoder()
             .decode(&mut self.input_byte_stream);
 
-        let Some((char, mut bytes)) = decoded else {
+        let decoded = match decoded {
+            // Replace invalid or incomplete sequences with a replacement character
+            Err(DecodingError::InvalidData | DecodingError::UnexpectedEof) => {
+                return Ok(Some(char::REPLACEMENT_CHARACTER))
+            }
+
+            // Valid encoded data, but invalid character for tokenization
+            Err(DecodingError::UnexpectedSurrogate) => {
+                return Err(HtmlParseError::SurrogateInInputStream)
+            }
+            Err(DecodingError::UnexpectedNonCharacter) => {
+                return Err(HtmlParseError::NoncharacterInInputStream)
+            }
+            Err(DecodingError::UnexpectedControl) => {
+                return Err(HtmlParseError::ControlCharacterInInputStream)
+            }
+
+            // Forward valid input characters from the decoder
+            Ok(x) => x,
+        };
+
+        // if we got a valid character, extract the code-point and the underlying bytes
+        let Some((character, mut bytes)) = decoded else {
             return Ok(None)
         };
 
+        // Append the bytes we read to the running byte tracker
         self.read_bytes.append(&mut bytes);
 
-        Ok(Some(char))
+        Ok(Some(character))
     }
 
     /// https://html.spec.whatwg.org/#changing-the-encoding-while-parsing
@@ -132,6 +157,7 @@ impl<R: Read> HtmlParser<R> {
         }
 
         // TODO: restart the navigate algorithm
+        todo!("restart navigation")
     }
 
     #[allow(unused)]
