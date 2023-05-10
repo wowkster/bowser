@@ -16,7 +16,5 @@ fn main() {
         MediaType::TextHTML
     );
 
-    // println!("Body: \n{:?}", res.text());
-
-    let _ = html::HtmlParser::new().try_parse(res);
+    let _ = html::HtmlParser::new(res).try_parse();
 }

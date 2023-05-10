@@ -2,18 +2,14 @@ use std::io::Read;
 
 use crate::{
     character_encoding::CharacterEncoding, io_queue::IoQueue, prescan::HtmlPreScanner,
-    HtmlParseResult,
+    HtmlParseResult, IoDecoder,
 };
 
-pub struct HtmlParser {
+pub struct HtmlParser<R> {
     character_encoding: CharacterEncoding,
     encoding_confidence: EncodingConfidence,
-}
-
-impl Default for HtmlParser {
-    fn default() -> Self {
-        Self::new()
-    }
+    input_byte_stream: IoQueue<R>,
+    read_bytes: Vec<u8>,
 }
 
 /// https://html.spec.whatwg.org/#concept-encoding-confidence
@@ -25,30 +21,35 @@ enum EncodingConfidence {
     Irrelevant,
 }
 
-impl HtmlParser {
-    pub fn new() -> Self {
+impl<R: Read> HtmlParser<R> {
+    pub fn new(input_byte_stream: R) -> Self {
         Self {
             character_encoding: CharacterEncoding::default(),
             encoding_confidence: EncodingConfidence::Tentative,
+            input_byte_stream: IoQueue::new(input_byte_stream),
+            read_bytes: Vec::new(),
         }
     }
 
     /// https://html.spec.whatwg.org/#parsing-with-a-known-character-encoding
-    pub fn with_definite_encoding(character_encoding: CharacterEncoding) -> Self {
+    pub fn with_definite_encoding(
+        input_byte_stream: R,
+        character_encoding: CharacterEncoding,
+    ) -> Self {
         Self {
             character_encoding,
             encoding_confidence: EncodingConfidence::Certain,
+            input_byte_stream: IoQueue::new(input_byte_stream),
+            read_bytes: Vec::new(),
         }
     }
 
     /// Will try to parse an HTML document, but will abort if any error condition is discovered.
     /// This behavior is allowed in the spec if the user agent does not wish to implement
     /// parse error recovery (https://html.spec.whatwg.org/#parse-errors)
-    pub fn try_parse(mut self, input_byte_stream: impl Read) -> HtmlParseResult<Document> {
-        let input_byte_stream = IoQueue::new(input_byte_stream);
-
+    pub fn try_parse(mut self) -> HtmlParseResult<Document> {
         if self.encoding_confidence != EncodingConfidence::Certain {
-            let (encoding, confidence) = HtmlParser::determine_encoding(&input_byte_stream);
+            let (encoding, confidence) = HtmlParser::determine_encoding(&self.input_byte_stream);
 
             self.character_encoding = encoding;
             self.encoding_confidence = confidence;
@@ -63,21 +64,88 @@ impl HtmlParser {
             self.encoding_confidence
         );
 
+        while let Some(c) = self.decode_char()? {
+            print!("{c}")
+        }
+
         todo!("parse document")
     }
 
     /// Will parse an HTML document and recover from any errors as defined in the HTML parsing specification.
     /// (https://html.spec.whatwg.org/#parse-errors)
     #[allow(unused)]
-    pub fn parse(self, input_byte_stream: impl Read) -> Document {
+    pub fn parse(self) -> Document {
         todo!("Parse with error recovery")
+    }
+
+    /// Decodes bytes from the input_byte_stream
+    #[allow(unused)]
+    fn decode_char(&mut self) -> HtmlParseResult<Option<char>> {        
+        let decoded = self
+            .character_encoding
+            .decoder()
+            .decode(&mut self.input_byte_stream);
+
+        let Some((char, mut bytes)) = decoded else {
+            return Ok(None)
+        };
+
+        self.read_bytes.append(&mut bytes);
+
+        Ok(Some(char))
+    }
+
+    /// https://html.spec.whatwg.org/#changing-the-encoding-while-parsing
+    ///
+    /// This algorithm is only invoked when a new encoding is found declared
+    /// on a meta element.
+    #[allow(unused)]
+    fn change_encoding(&mut self, new_encoding: CharacterEncoding) {
+        if matches!(
+            self.character_encoding,
+            CharacterEncoding::Utf16BE | CharacterEncoding::Utf16LE
+        ) {
+            self.encoding_confidence = EncodingConfidence::Certain;
+            return;
+        }
+
+        if matches!(
+            new_encoding,
+            CharacterEncoding::Utf16BE | CharacterEncoding::Utf16LE
+        ) {
+            self.character_encoding = CharacterEncoding::Utf8;
+        }
+
+        if new_encoding == CharacterEncoding::XUserDefined {
+            self.character_encoding = CharacterEncoding::Windows1252;
+        }
+
+        if new_encoding == self.character_encoding {
+            self.encoding_confidence = EncodingConfidence::Certain;
+            return;
+        }
+
+        if self.is_encoding_equal(new_encoding) {
+            self.character_encoding = new_encoding;
+            self.encoding_confidence = EncodingConfidence::Certain;
+            return;
+        }
+
+        // TODO: restart the navigate algorithm
+    }
+
+    #[allow(unused)]
+    fn is_encoding_equal(&self, new_encoding: CharacterEncoding) -> bool {
+        // TODO: Check if all the bytes up to the last byte converted by the
+        //       current decoder have the same Unicode interpretations in both
+        //       the current encoding and the new encoding
+
+        todo!("check byte equality")
     }
 
     /// Function that implements the "encoding sniffing algorithm"
     /// defined in the spec (https://html.spec.whatwg.org/#determining-the-character-encoding)
-    fn determine_encoding<R: Read>(
-        io_queue: &IoQueue<R>,
-    ) -> (CharacterEncoding, EncodingConfidence) {
+    fn determine_encoding(io_queue: &IoQueue<R>) -> (CharacterEncoding, EncodingConfidence) {
         // Step 1: BOM sniffing
         let bytes = (
             io_queue.peek_nth(0),

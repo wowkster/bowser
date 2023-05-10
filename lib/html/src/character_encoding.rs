@@ -1,6 +1,9 @@
-use std::str::FromStr;
+use core::num;
+use std::{io::Read, str::FromStr};
 
-#[derive(Default)]
+use crate::{io_queue::IoQueue, HtmlParseResult};
+
+#[derive(Default, PartialEq, Eq, Clone, Copy)]
 pub enum CharacterEncoding {
     #[default]
     Utf8,
@@ -170,5 +173,84 @@ impl ToString for CharacterEncoding {
             CharacterEncoding::XUserDefined => "x-user-defined",
         }
         .to_owned()
+    }
+}
+
+impl CharacterEncoding {
+    pub fn decoder<R: Read>(&self) -> impl IoDecoder<R> {
+        match self {
+            CharacterEncoding::Utf8 => Utf8Decoder,
+            CharacterEncoding::IBM866 => todo!(),
+            CharacterEncoding::ISO8859_2 => todo!(),
+            CharacterEncoding::ISO8859_3 => todo!(),
+            CharacterEncoding::ISO8859_4 => todo!(),
+            CharacterEncoding::ISO8859_5 => todo!(),
+            CharacterEncoding::ISO8859_6 => todo!(),
+            CharacterEncoding::ISO8859_7 => todo!(),
+            CharacterEncoding::ISO8859_8 => todo!(),
+            CharacterEncoding::ISO8859_8I => todo!(),
+            CharacterEncoding::ISO8859_10 => todo!(),
+            CharacterEncoding::ISO8859_13 => todo!(),
+            CharacterEncoding::ISO8859_14 => todo!(),
+            CharacterEncoding::ISO8859_15 => todo!(),
+            CharacterEncoding::ISO8859_16 => todo!(),
+            CharacterEncoding::KOI8R => todo!(),
+            CharacterEncoding::KOI8U => todo!(),
+            CharacterEncoding::Macintosh => todo!(),
+            CharacterEncoding::Windows874 => todo!(),
+            CharacterEncoding::Windows1250 => todo!(),
+            CharacterEncoding::Windows1251 => todo!(),
+            CharacterEncoding::Windows1252 => todo!(),
+            CharacterEncoding::Windows1253 => todo!(),
+            CharacterEncoding::Windows1254 => todo!(),
+            CharacterEncoding::Windows1255 => todo!(),
+            CharacterEncoding::Windows1256 => todo!(),
+            CharacterEncoding::Windows1257 => todo!(),
+            CharacterEncoding::Windows1258 => todo!(),
+            CharacterEncoding::XMacCyrillic => todo!(),
+            CharacterEncoding::GBK => todo!(),
+            CharacterEncoding::GB18030 => todo!(),
+            CharacterEncoding::Big5 => todo!(),
+            CharacterEncoding::EucJp => todo!(),
+            CharacterEncoding::ISO2022Jp => todo!(),
+            CharacterEncoding::ShiftJIS => todo!(),
+            CharacterEncoding::EucKr => todo!(),
+            CharacterEncoding::Replacement => todo!(),
+            CharacterEncoding::Utf16BE => todo!(),
+            CharacterEncoding::Utf16LE => todo!(),
+            CharacterEncoding::XUserDefined => todo!(),
+        }
+    }
+}
+
+pub trait IoDecoder<R: Read> {
+    fn decode(&self, io_queue: &mut IoQueue<R>) -> Option<(char, Vec<u8>)>;
+}
+
+pub struct Utf8Decoder;
+
+impl<R: Read> IoDecoder<R> for Utf8Decoder {
+    fn decode(&self, io_queue: &mut IoQueue<R>) -> Option<(char, Vec<u8>)> {
+        let start_position = io_queue.bytes_read();
+
+        let first_bytes = io_queue.peek_arr(4);
+
+        let c = utf8_decode::decode(io_queue);
+
+        let end_position = io_queue.bytes_read();
+
+        let num_bytes = end_position - start_position;
+
+        let read_bytes = (&first_bytes[..num_bytes]).to_vec();
+
+        let Some(c) = c else {
+            return None
+        };
+
+        let Ok(c) = c else {
+            return None
+        };
+
+        Some((c, read_bytes))
     }
 }
