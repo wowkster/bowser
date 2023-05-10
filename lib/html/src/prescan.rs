@@ -2,6 +2,8 @@ use std::io::Read;
 
 use crate::{io_queue::IoQueue, CharacterEncoding};
 
+/// A data structure for implementing the byte stream pre-scanning algorithm defined in the spec
+/// (https://html.spec.whatwg.org/#prescan-a-byte-stream-to-determine-its-encoding)
 pub struct HtmlPreScanner<'a, R> {
     byte_stream: &'a IoQueue<R>,
     position: usize,
@@ -15,34 +17,6 @@ impl<'a, R: Read> HtmlPreScanner<'a, R> {
             position: 0,
             max_pos: 0,
         }
-    }
-
-    fn contains_bytes(&self, bytes: &[u8]) -> Option<bool> {
-        if self.position + bytes.len() > self.max_pos {
-            return None;
-        }
-
-        Some(self.byte_stream.contains_bytes(self.position, bytes))
-    }
-
-    fn matches_sequence(&self, sequence: &[Vec<u8>]) -> Option<bool> {
-        if self.position + sequence.len() > self.max_pos {
-            return None;
-        }
-
-        Some(self.byte_stream.matches_sequence(self.position, sequence))
-    }
-
-    fn assert_pos(&self) -> Option<()> {
-        if self.position > self.max_pos {
-            None
-        } else {
-            Some(())
-        }
-    }
-
-    fn current_byte(&self) -> Option<u8> {
-        self.byte_stream.peek_nth(self.position)
     }
 
     pub fn pre_scan_byte_stream(mut self) -> Option<CharacterEncoding> {
@@ -491,5 +465,35 @@ impl<'a, R: Read> HtmlPreScanner<'a, R> {
 
         // Step 18
         Some(encoding)
+    }
+
+    /* Helper methods for structure */
+
+    fn contains_bytes(&self, bytes: &[u8]) -> Option<bool> {
+        if self.position + bytes.len() > self.max_pos {
+            return None;
+        }
+
+        Some(self.byte_stream.contains_bytes(self.position, bytes))
+    }
+
+    fn matches_sequence(&self, sequence: &[Vec<u8>]) -> Option<bool> {
+        if self.position + sequence.len() > self.max_pos {
+            return None;
+        }
+
+        Some(self.byte_stream.matches_sequence(self.position, sequence))
+    }
+
+    fn assert_pos(&self) -> Option<()> {
+        if self.position > self.max_pos {
+            None
+        } else {
+            Some(())
+        }
+    }
+
+    fn current_byte(&self) -> Option<u8> {
+        self.byte_stream.peek_nth(self.position)
     }
 }
