@@ -5,6 +5,32 @@ use crate::{
     DecodingError, HtmlParseError, HtmlParseResult,
 };
 
+enum InsertionMode {
+    Initial,
+    BeforeHtml,
+    BeforeHead,
+    InHead,
+    InHeadNoscript,
+    AfterHead,
+    InBody,
+    Text,
+    InTable,
+    InTableText,
+    InCaption,
+    InColumnGroup,
+    InTableBody,
+    InRow,
+    InCell,
+    InSelect,
+    InSelectInTable,
+    InTemplate,
+    AfterBody,
+    InFrameset,
+    AfterFrameset,
+    AfterAfterBody,
+    AfterAfterFrameset,
+}
+
 pub struct HtmlParser<R> {
     character_encoding: CharacterEncoding,
     encoding_confidence: EncodingConfidence,
@@ -12,6 +38,7 @@ pub struct HtmlParser<R> {
     read_bytes: Vec<u8>,
     peeked_decoded_char: Option<char>,
     peeked_input_char: Option<char>,
+    insertion_mode: InsertionMode,
 }
 
 /// https://html.spec.whatwg.org/#concept-encoding-confidence
@@ -32,6 +59,7 @@ impl<R: Read> HtmlParser<R> {
             read_bytes: Vec::new(),
             peeked_decoded_char: None,
             peeked_input_char: None,
+            insertion_mode: InsertionMode::Initial,
         }
     }
 
@@ -47,6 +75,7 @@ impl<R: Read> HtmlParser<R> {
             read_bytes: Vec::new(),
             peeked_decoded_char: None,
             peeked_input_char: None,
+            insertion_mode: InsertionMode::Initial,
         }
     }
 
