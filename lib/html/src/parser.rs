@@ -10,6 +10,8 @@ pub struct HtmlParser<R> {
     encoding_confidence: EncodingConfidence,
     input_byte_stream: IoQueue<R>,
     read_bytes: Vec<u8>,
+    peeked_decoded_char: Option<char>,
+    peeked_input_char: Option<char>,
 }
 
 /// https://html.spec.whatwg.org/#concept-encoding-confidence
@@ -28,6 +30,8 @@ impl<R: Read> HtmlParser<R> {
             encoding_confidence: EncodingConfidence::Tentative,
             input_byte_stream: IoQueue::new(input_byte_stream),
             read_bytes: Vec::new(),
+            peeked_decoded_char: None,
+            peeked_input_char: None,
         }
     }
 
@@ -41,6 +45,8 @@ impl<R: Read> HtmlParser<R> {
             encoding_confidence: EncodingConfidence::Certain,
             input_byte_stream: IoQueue::new(input_byte_stream),
             read_bytes: Vec::new(),
+            peeked_decoded_char: None,
+            peeked_input_char: None,
         }
     }
 
@@ -64,7 +70,7 @@ impl<R: Read> HtmlParser<R> {
             self.encoding_confidence
         );
 
-        while let Some(c) = self.decode_char()? {
+        while let Some(c) = self.next_char_from_byte_stream()? {
             print!("{c}")
         }
 
@@ -78,10 +84,52 @@ impl<R: Read> HtmlParser<R> {
         todo!("Parse with error recovery")
     }
 
+    /// Gets a character from the "input stream" and normalizes new lines
+    /// according to the spec (https://infra.spec.whatwg.org/#normalize-newlines)
+    #[allow(unused)]
+    fn next_char_from_input_stream(&mut self) -> HtmlParseResult<Option<char>> {
+        // If a character was already peeked, return that instead
+        if let Some(peeked) = self.peeked_input_char {
+            return Ok(self.peeked_input_char.take());
+        }
+
+        // Read the next char
+        let character = self.next_char_from_byte_stream()?;
+
+        let Some(character) = character else {
+            return Ok(None)
+        };
+
+        // Normalize new lines
+        match (character, self.peek_char_from_byte_stream()?) {
+            // Ignore CR and return only the LF
+            ('\r', Some('\n')) => self.next_char_from_byte_stream(),
+            ('\r', _) => Ok(Some('\n')),
+            _ => Ok(Some(character)),
+        }
+    }
+
+    /// Peeks the next normalized char from the input stream
+    #[allow(unused)]
+    fn peek_char_from_input_stream(&mut self) -> HtmlParseResult<Option<&char>> {
+        // If a character was not already peeked, decode one
+        if self.peeked_input_char.is_none() {
+            self.peeked_input_char = self.next_char_from_input_stream()?;
+        }
+
+        // Return reference to peeked
+        return Ok(self.peeked_input_char.as_ref());
+    }
+
     /// Decodes bytes from the input_byte_stream in a "lossy" manner (i.e. invalid data is
     /// replaced with REPLACEMENT_CHARACTER)
     #[allow(unused)]
-    fn decode_char(&mut self) -> HtmlParseResult<Option<char>> {
+    fn next_char_from_byte_stream(&mut self) -> HtmlParseResult<Option<char>> {
+        // If a character was already peeked, return that instead
+        if let Some(peeked) = self.peeked_decoded_char {
+            return Ok(self.peeked_decoded_char.take());
+        }
+
         // Use the decoder for the selected character encoding to get a character
         let decoded = self
             .character_encoding
@@ -118,6 +166,18 @@ impl<R: Read> HtmlParser<R> {
         self.read_bytes.append(&mut bytes);
 
         Ok(Some(character))
+    }
+
+    /// Peeks the next decoded char from the input byte stream
+    #[allow(unused)]
+    fn peek_char_from_byte_stream(&mut self) -> HtmlParseResult<Option<&char>> {
+        // If a character was not already peeked, decode one
+        if self.peeked_decoded_char.is_none() {
+            self.peeked_decoded_char = self.next_char_from_byte_stream()?;
+        }
+
+        // Return reference to peeked
+        return Ok(self.peeked_decoded_char.as_ref());
     }
 
     /// https://html.spec.whatwg.org/#changing-the-encoding-while-parsing
